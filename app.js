@@ -18,19 +18,21 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const User = require('./models/user');
 const mongoSanitize = require('express-mongo-sanitize');
-const helmet = require('helmet')
 const cors  = require('cors');
+const MongoDBStore = require("connect-mongo");
 
-mongoose.connect('mongodb://localhost:27017/yelp-camp', {
+const dbUrl = process.env.DB_URL || 'mongodb://localhost:27017/yelp-camp';
+
+mongoose.connect(dbUrl, {
     useNewUrlParser: true,
-    useUnifiedTopology: true
+    useUnifiedTopology: true,
 });
 
 const db = mongoose.connection;
-db.on("error", console.error.bind(console, 'connection error:'));
+db.on("error", console.error.bind(console, "connection error:"));
 db.once("open", () => {
-    console.log("Database Connected!");
-})
+    console.log("Database connected");
+});
 
 const app = express();
 app.engine('ejs', ejsMate);
@@ -42,6 +44,18 @@ app.use(methodOverride('_method'));
 app.use(express.static( path.join(__dirname, 'public')));
 app.use(mongoSanitize());
 
+const secret = process.env.SECRET || 'thisshouldbeabettersecret!';
+
+app.use(session({
+    secret,
+    saveUninitialized: false, // don't create session until something stored
+    resave: false, //don't save session if unmodified
+    store: MongoDBStore.create({
+      mongoUrl: dbUrl,
+      touchAfter: 24 * 3600 // time period in seconds
+    })
+  }));
+  
 
 const sessionConfig = {
     name: 'session',
@@ -57,6 +71,20 @@ const sessionConfig = {
 app.use(session(sessionConfig));
 app.use(flash());
 
+//CORS Setting
+const CorsOptions = {
+    origin: '*',
+  
+    methods: [
+      'GET',
+      'POST',
+    ],
+  
+    allowedHeaders: [
+      'Content-Type',
+    ],
+};
+app.use(cors(CorsOptions));
 
 app.use(passport.initialize());
 app.use(passport.session());
